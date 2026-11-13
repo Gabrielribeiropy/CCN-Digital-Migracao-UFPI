@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Leitor de PDF | CCN Digital</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#edf3f9;color:#10243b;font:14px system-ui,sans-serif}
+    .toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:12px;min-height:50px;padding:7px;background:#fff;border-bottom:1px solid #d7e4f0}
+    button{min-width:42px;min-height:36px;border:1px solid #bcd1e7;border-radius:9px;background:#f4f8fc;color:#075ca8;font:inherit;font-weight:700}button:disabled{opacity:.4}
+    #page-count{min-width:80px;text-align:center;font-weight:700}.sheet{display:flex;justify-content:center;padding:12px}canvas{display:block;max-width:100%;height:auto;background:#fff;box-shadow:0 3px 14px #143d6520}
+    .message{padding:30px 22px;text-align:center;line-height:1.5}.message strong{display:block;font-size:17px;margin-bottom:7px}
+  </style>
+</head>
+<body>
+  <nav class="toolbar" aria-label="Páginas do PDF"><button id="previous" type="button" aria-label="Página anterior" disabled>‹</button><span id="page-count">Abrindo…</span><button id="next" type="button" aria-label="Próxima página" disabled>›</button></nav>
+  <main id="content" class="sheet"><canvas id="page" aria-label="Página do PDF"></canvas></main>
+  <script type="module">
+    import * as pdfjs from './pdf.min.mjs';
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs', import.meta.url).href;
+    const params = new URLSearchParams(location.search);
+    const target = params.get('url');
+    const canvas = document.querySelector('#page');
+    const count = document.querySelector('#page-count');
+    const previous = document.querySelector('#previous');
+    const next = document.querySelector('#next');
+    let documentPdf, pageNumber = 1, renderTask;
+    const signal = type => window.ReactNativeWebView?.postMessage(JSON.stringify({ type }));
+    async function renderPage() {
+      if (renderTask) { renderTask.cancel(); try { await renderTask.promise; } catch {} }
+      const page = await documentPdf.getPage(pageNumber);
+      const width = Math.max(280, Math.min(window.innerWidth - 24, 1000));
+      const raw = page.getViewport({ scale:1 });
+      const viewport = page.getViewport({ scale:width/raw.width });
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(viewport.width * ratio);
+      canvas.height = Math.floor(viewport.height * ratio);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      renderTask = page.render({ canvasContext:canvas.getContext('2d'), viewport, transform:ratio === 1 ? null : [ratio,0,0,ratio,0,0] });
+      await renderTask.promise;
+      count.textContent = `${pageNumber} / ${documentPdf.numPages}`;
+      previous.disabled = pageNumber === 1;
+      next.disabled = pageNumber === documentPdf.numPages;
+      signal('pdf-ready');
+    }
+    function fail() {
+      count.textContent = 'PDF indisponível';
+      document.querySelector('#content').innerHTML = '<div class="message"><strong>Não foi possível abrir este PDF.</strong>Confira se o arquivo ainda está disponível na fonte oficial e tente novamente.</div>';
+      signal('pdf-error');
+    }
+    previous.onclick = () => { if (pageNumber > 1) { pageNumber--; renderPage().catch(fail); } };
+    next.onclick = () => { if (documentPdf && pageNumber < documentPdf.numPages) { pageNumber++; renderPage().catch(fail); } };
+    window.addEventListener('resize', () => { if (documentPdf) renderPage().catch(fail); });
+    try {
+      const parsed = new URL(target);
+      if (!['http:','https:'].includes(parsed.protocol)) throw new Error('url');
+      documentPdf = await pdfjs.getDocument({ url:`/api/portal?raw=1&url=${encodeURIComponent(parsed.href)}` }).promise;
+      await renderPage();
+    } catch { fail(); }
+  </script>
+</body>
+</html>

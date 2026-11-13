@@ -1,0 +1,13 @@
+node_modules/
+.env*
+!.env.example
+*.pdf
+*.apk
+*.aab
+*.jks
+*.keystore
+*.pem
+*.p12
+*.backup.json
+*.log
+coverage/

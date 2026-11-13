@@ -1,0 +1,18 @@
+[Unit]
+Description=CCN Digital - aplicar esquema PostgreSQL
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=ccn-digital
+Group=ccn-digital
+WorkingDirectory=/opt/ccn-digital/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/ccn-digital/ccn-digital.env
+ExecStartPre=/usr/bin/node scripts/verify-vps-env.mjs
+ExecStart=/usr/bin/node scripts/db-migrate.mjs
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

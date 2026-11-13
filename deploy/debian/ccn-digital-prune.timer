@@ -1,0 +1,10 @@
+[Unit]
+Description=CCN Digital - limpeza diária de registros vencidos
+
+[Timer]
+OnCalendar=*-*-* 03:10:00
+Persistent=true
+Unit=ccn-digital-prune.service
+
+[Install]
+WantedBy=timers.target

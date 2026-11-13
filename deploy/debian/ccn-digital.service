@@ -1,0 +1,28 @@
+[Unit]
+Description=CCN Digital - painel administrativo e API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ccn-digital
+Group=ccn-digital
+WorkingDirectory=/opt/ccn-digital/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/ccn-digital/ccn-digital.env
+ExecStartPre=/usr/bin/node scripts/verify-vps-env.mjs
+ExecStart=/usr/bin/node server/debian.mjs
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+{
+  "name": "ccn-digital-painel-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/debian.mjs",
+    "check": "node --test tests/*.test.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:prune": "node scripts/db-prune.mjs",
+    "vps:check": "node scripts/verify-vps-env.mjs",
+    "admin:hash": "node scripts/create-admin-hash.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "10.3.1",
+    "pg": "8.16.3",
+    "redis": "5.0.0",
+    "toqr": "0.1.1"
+  }
+}
