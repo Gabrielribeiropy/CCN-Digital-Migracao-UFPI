@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { kvReady, reserveLoginAttempt } from './kv-store.mjs';
 
 export async function allowPublicRequest(request, scope, target) {
-  const forwarded = request.headers['x-ccn-client-ip'];
+  const forwarded = request.headers['x-vercel-forwarded-for'] || request.headers['x-forwarded-for'];
   const ip = String(forwarded || request.socket?.remoteAddress || '').split(',')[0].trim();
   if (!ip || !kvReady()) return { allowed: false, retryAfter: 60 };
   const digest = createHash('sha256').update(ip).digest('hex');

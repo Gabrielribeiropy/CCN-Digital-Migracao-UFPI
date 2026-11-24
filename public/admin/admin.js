@@ -84,6 +84,12 @@ function areaLocationField(link) {
   return `<label>Onde aparecer<select data-link-group="${id}">${options}${known ? '' : `<option value="${escapeHtml(current)}" selected>Página · ${escapeHtml(current)}</option>`}<option value="__new__">Criar novo setor na Página…</option></select></label><label data-new-group-wrapper="${id}" hidden>Nome do novo setor<input data-link-new-group="${id}" maxlength="60" placeholder="Ex.: Setor de limpeza"></label>`;
 }
 
+// Mensagem de status com tom visual: 'error' (vermelho), 'success' (verde), 'progress' (cinza).
+function say(element, text, tone = '') {
+  element.textContent = text;
+  if (tone) element.dataset.tone = tone; else delete element.dataset.tone;
+}
+
 async function request(path, options = {}) {
   const response = await fetch(path, { credentials: 'same-origin', headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
   const body = await response.json().catch(() => ({}));
@@ -246,7 +252,7 @@ function setDirty(value) {
   document.querySelector('#save-bar').hidden = !value;
   document.querySelector('#save-title').textContent = value ? 'Alterações não salvas' : 'Tudo salvo';
   document.querySelector('#save-detail').textContent = value ? 'Salve para atualizar o aplicativo.' : 'As configurações estão sincronizadas.';
-  if (value) message.textContent = '';
+  if (value) say(message, '');
 }
 
 function filterPages() {
@@ -309,7 +315,7 @@ async function openPanel(identity = {}) {
   document.querySelector('.sidebar-account span:last-child').textContent = currentRole === 'admin' ? 'Administrador' : currentRole === 'editor' ? 'Editor de setor' : 'Consulta';
   document.querySelectorAll('#panel-nav [data-view]').forEach(button => { button.hidden = button.dataset.view === 'diagnostics' || (['users'].includes(button.dataset.view) && currentRole !== 'admin') || (['editor', 'viewer'].includes(currentRole) && !['overview', 'users'].includes(button.dataset.view) && !allowedAreas.includes(button.dataset.view)); });
   document.querySelectorAll('[data-account-go]').forEach(button => { button.hidden = (button.dataset.accountGo === 'users' && currentRole !== 'admin') || (['editor', 'viewer'].includes(currentRole) && button.dataset.accountGo !== 'overview' && !allowedAreas.includes(button.dataset.accountGo)); });
-  if (!result.storage.persistent) message.textContent = 'Não foi possível acessar os dados do painel. Tente novamente mais tarde.';
+  if (!result.storage.persistent) say(message, 'Não foi possível acessar os dados do painel. Tente novamente mais tarde.', 'error');
   if (currentRole === 'viewer') {
     document.querySelector('#config-form').classList.add('read-only');
     document.querySelectorAll('#config-form input, #config-form textarea, #config-form select, #config-form button').forEach(control => { control.disabled = true; });
@@ -319,7 +325,92 @@ async function openPanel(identity = {}) {
   void loadAccount();
   void loadNewsStatus();
   void loadNotifications();
+  if (tourFits() && !tourSeen()) openTour();
 }
+
+// Tutorial de primeiro acesso: apresenta cada área que a pessoa pode usar. Fica salvo por conta neste navegador.
+const tourSteps = [
+  { kicker:'BEM-VINDO', icon:'#i-grid', title:'Conheça o painel do CCN Digital', text:'Tudo o que você altera aqui aparece no aplicativo CCN Digital, usado por estudantes, professores e servidores. Em poucos passos, mostramos para que serve cada área.', tips:['Use “Próximo” e “Voltar” para navegar ou “Pular tutorial” para começar já.', 'Você pode rever este tutorial quando quiser em “Ver tutorial”, no menu.'] },
+  { view:'overview', title:'Visão geral', text:'É a página inicial do painel. Mostra um resumo do conteúdo do aplicativo e atalhos para as áreas que você pode editar.', tips:['A busca no topo encontra rapidamente uma página ou um link.', 'O sino mostra os mandatos do Conselho que estão perto do fim.'] },
+  { view:'home', title:'Início do app', text:'Define os cards que aparecem na primeira tela do aplicativo, a ordem deles e o link da localização do CCN.', tips:['Deixe ativos só os cards que fazem sentido no momento.'] },
+  { view:'pages', title:'Páginas e busca', text:'Reúne os links de cada setor, como coordenações, departamentos e documentos, que as pessoas encontram nas páginas e na busca do app.', tips:['Para cada link, escolha se ele abre dentro do aplicativo ou no navegador.', 'Ao cadastrar um link, você também pode criar um setor novo.'] },
+  { view:'services', title:'Serviços', text:'Organiza reservas, solicitações e outros serviços oferecidos pelo CCN.', tips:['Mantenha ativos apenas os serviços disponíveis no momento.'] },
+  { view:'restricted', title:'Acesso restrito', text:'Lista os sistemas destinados ao público autorizado, exibidos na área Acesso restrito do aplicativo.', tips:['Confira se cada endereço está correto antes de salvar.'] },
+  { view:'council', title:'Conselho Departamental', text:'Cadastra a composição do Conselho por setor, com o mandato de cada integrante.', tips:['Quando faltam 30 dias ou menos para o fim de um mandato, o aviso aparece no sino.', 'Você escolhe em que lugar do aplicativo o Conselho é exibido.'] },
+  { view:'news', title:'Notícias', text:'As notícias do portal oficial da UFPI chegam sozinhas. Aqui você publica notícias próprias e pode ocultar ou destacar notícias oficiais.', tips:['A notícia destacada aparece no começo do carrossel do aplicativo.'] },
+  { view:'users', title:'Usuários e permissões', text:'Cadastra as pessoas que usam o painel e define o que cada uma pode fazer.', tips:['Administrador vê tudo. Editor de setor edita só as áreas marcadas. Somente consulta apenas visualiza.', 'Se alguém perder o autenticador, use “Redefinir autenticador” na lista.'] },
+  { view:'settings', title:'Configurações', text:'Atualiza os contatos exibidos na página Sobre do aplicativo e o aviso de nova versão para Android.', tips:['Os contatos são apenas informativos: não mudam quem recebe e-mails do sistema.'] },
+  { kicker:'ÚLTIMO PASSO', icon:'#i-arrow', title:'Salve para publicar no aplicativo', text:'Quando você altera algo, aparece a barra “Alterações não salvas”. Clique em “Salvar alterações” para a mudança chegar ao aplicativo.', tips:['Mensagens em vermelho explicam o que precisa ser corrigido; em verde, deu tudo certo.', 'No ícone de pessoa, no topo, ficam “Alterar senha” e “Segurança da conta”.'] },
+];
+let tourIndex = 0;
+let tourActive = [];
+let tourReturnFocus = null;
+const tourKey = () => `ccn-admin-tour:v1:${sessionAccountId || currentRole}`;
+function tourSeen() {
+  try { return localStorage.getItem(tourKey()) === 'done'; } catch { return true; }
+}
+const tourFits = () => matchMedia('(min-width: 901px)').matches;
+function navButton(view) { return document.querySelector(`#panel-nav [data-view="${view}"]`); }
+function openTour() {
+  tourActive = tourSteps.filter(step => !step.view || (navButton(step.view) && !navButton(step.view).hidden));
+  if (currentRole === 'viewer') {
+    tourActive[tourActive.length - 1] = { kicker:'ÚLTIMO PASSO', icon:'#i-eye', title:'Seu perfil é de consulta', text:'Você pode ver todas as áreas liberadas, mas não alterar o conteúdo. Se precisar editar algo, peça a um administrador para mudar seu perfil.', tips:['No ícone de pessoa, no topo, ficam “Alterar senha” e “Segurança da conta”.'] };
+  }
+  tourIndex = 0;
+  tourReturnFocus = document.activeElement;
+  document.querySelector('#account-menu').hidden = true;
+  document.querySelector('#tour').hidden = false;
+  document.body.classList.add('tour-open');
+  renderTour();
+}
+function renderTour() {
+  const step = tourActive[tourIndex];
+  const last = tourIndex === tourActive.length - 1;
+  showView(step.view || 'overview');
+  document.querySelectorAll('#panel-nav .tour-focus').forEach(button => button.classList.remove('tour-focus'));
+  const button = step.view && navButton(step.view);
+  if (button) { button.classList.add('tour-focus'); button.scrollIntoView({ block:'nearest', inline:'center' }); }
+  document.querySelector('#tour-kicker').textContent = step.kicker || `PASSO ${tourIndex} DE ${tourActive.length - 2}`;
+  document.querySelector('#tour-icon').setAttribute('href', step.icon || button?.querySelector('use')?.getAttribute('href') || '#i-grid');
+  document.querySelector('#tour-title').textContent = step.title;
+  document.querySelector('#tour-text').textContent = step.text;
+  document.querySelector('#tour-tips').replaceChildren(...step.tips.map(tip => Object.assign(document.createElement('li'), { textContent: tip })));
+  document.querySelector('#tour-dots').replaceChildren(...tourActive.map((_, index) => Object.assign(document.createElement('span'), { className: index === tourIndex ? 'active' : '' })));
+  document.querySelector('#tour-back').hidden = tourIndex === 0;
+  document.querySelector('#tour-next').textContent = last ? 'Começar a usar' : tourIndex === 0 ? 'Começar tutorial' : 'Próximo';
+  document.querySelector('#tour-skip').hidden = last;
+  document.querySelector('#tour-next').focus();
+}
+function closeTour() {
+  try { localStorage.setItem(tourKey(), 'done'); } catch { /* Sem armazenamento local, o tutorial volta no próximo acesso. */ }
+  document.querySelector('#tour').hidden = true;
+  document.body.classList.remove('tour-open');
+  document.querySelectorAll('#panel-nav .tour-focus').forEach(button => button.classList.remove('tour-focus'));
+  showView('overview');
+  tourReturnFocus?.focus?.();
+}
+document.querySelector('#tour-next').addEventListener('click', () => {
+  if (tourIndex >= tourActive.length - 1) return closeTour();
+  tourIndex++;
+  renderTour();
+});
+document.querySelector('#tour-back').addEventListener('click', () => { if (tourIndex > 0) { tourIndex--; renderTour(); } });
+document.querySelector('#tour-skip').addEventListener('click', closeTour);
+document.querySelector('#tour').addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeTour();
+  else if (event.key === 'ArrowRight' && event.target.tagName !== 'INPUT') document.querySelector('#tour-next').click();
+  else if (event.key === 'ArrowLeft' && tourIndex > 0) document.querySelector('#tour-back').click();
+  else if (event.key === 'Tab') {
+    const focusable = [...document.querySelectorAll('#tour button:not([hidden])')];
+    const edge = event.shiftKey ? focusable[0] : focusable[focusable.length - 1];
+    if (document.activeElement === edge) { event.preventDefault(); (event.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus(); }
+  }
+});
+document.querySelectorAll('[data-tour-open]').forEach(button => button.addEventListener('click', () => {
+  if (currentRole === 'developer' || !tourFits()) return;
+  if (dirty && !confirm('Há alterações não salvas. O tutorial troca de área, mas mantém o que você editou. Continuar?')) return;
+  openTour();
+}));
 
 async function openDeveloperPanel() {
   currentRole = 'developer';
@@ -329,6 +420,7 @@ async function openDeveloperPanel() {
   document.body.classList.add('panel-open');
   document.querySelector('#logout').hidden = false;
   document.querySelector('.sidebar-account span:last-child').textContent = 'Desenvolvedor';
+  document.querySelectorAll('[data-tour-open]').forEach(button => { button.hidden = true; });
   document.querySelectorAll('#panel-nav [data-view]').forEach(button => { button.hidden = button.dataset.view !== 'diagnostics'; });
   document.querySelector('#save-bar').hidden = true;
   showView('diagnostics');
@@ -353,17 +445,17 @@ async function loadAccount() {
 
 async function loadDiagnostics() {
   const status = document.querySelector('#diagnostics-message');
-  status.textContent = 'Verificando os serviços…';
+  say(status, 'Verificando os serviços…', 'progress');
   try {
     lastDiagnostics = await request('/api/admin/diagnostics');
     document.querySelector('#diagnostics-summary').textContent = `${lastDiagnostics.summary.ok} verificações normais · ${lastDiagnostics.summary.attention} pontos de atenção`;
     document.querySelector('#diagnostics-list').innerHTML = lastDiagnostics.checks.map(item => `<article class="diagnostics-check" data-status="${escapeHtml(item.status)}"><strong>${item.status === 'ok' ? '✓' : '!'} ${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p><small>${escapeHtml(item.action)}</small></article>`).join('');
     document.querySelector('#download-diagnostics').disabled = false;
-    status.textContent = `Verificação concluída em ${new Date(lastDiagnostics.generatedAt).toLocaleString('pt-BR')}.`;
+    say(status, `Verificação concluída em ${new Date(lastDiagnostics.generatedAt).toLocaleString('pt-BR')}.`);
   } catch (error) {
     lastDiagnostics = null;
     document.querySelector('#download-diagnostics').disabled = true;
-    status.textContent = error.message;
+    say(status, error.message, 'error');
   }
 }
 
@@ -382,15 +474,15 @@ function downloadDiagnostics() {
 async function loadNewsStatus() {
   const status = document.querySelector('#news-source-message');
   const button = document.querySelector('#refresh-news');
-  status.textContent = '';
+  say(status, '');
   button.disabled = true;
   try {
     const body = await request(`/api/admin/config?news=1&_=${Date.now()}`);
     officialNewsItems = body.items || [];
     renderOfficialNews();
-    if (body.stale) status.textContent = 'O portal oficial está temporariamente indisponível. As notícias salvas continuam disponíveis.';
-    else if (!officialNewsItems.length) status.textContent = 'Nenhuma notícia foi encontrada no portal oficial.';
-  } catch { status.textContent = 'Não foi possível consultar as notícias agora. Tente novamente mais tarde.'; }
+    if (body.stale) say(status, 'O portal oficial está temporariamente indisponível. As notícias salvas continuam disponíveis.');
+    else if (!officialNewsItems.length) say(status, 'Nenhuma notícia foi encontrada no portal oficial.');
+  } catch { say(status, 'Não foi possível consultar as notícias agora. Tente novamente mais tarde.', 'error'); }
   finally { button.disabled = false; }
 }
 
@@ -413,8 +505,17 @@ function showMfaQr(secretId, dataUrl) {
     manual.className = 'mfa-manual';
     const summary = document.createElement('summary');
     summary.textContent = 'Não consigo escanear · usar chave manual';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'secondary-button mfa-copy-key';
+    copy.textContent = 'Copiar chave';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(secret.textContent.trim()); copy.textContent = 'Chave copiada ✓'; }
+      catch { getSelection().selectAllChildren(secret); copy.textContent = 'Selecionada · use Ctrl+C'; }
+      setTimeout(() => { copy.textContent = 'Copiar chave'; }, 2500);
+    });
     secret.before(manual);
-    manual.append(summary, secret);
+    manual.append(summary, secret, copy);
   }
   manual.open = false;
   let qr = manual.previousElementSibling;
@@ -432,8 +533,8 @@ function clearMfaQr(secretId) {
   const qr = secret.closest('details')?.previousElementSibling;
   if (qr?.classList.contains('mfa-qr')) qr.removeAttribute('src');
 }
-async function finishLogin(code = '') {
-  const result = await request('/api/admin/login', { method:'POST', body:JSON.stringify({ ...pendingLogin, code }) });
+async function finishLogin(code = '', action = undefined) {
+  const result = await request('/api/admin/login', { method:'POST', body:JSON.stringify({ ...pendingLogin, code, action }) });
   pendingLogin = null;
   document.querySelector('#login-form').reset();
   if (result.mfaSetup) {
@@ -450,7 +551,7 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
   const data = new FormData(form);
   pendingLogin = { username:String(data.get('username')||'').trim(), password:String(data.get('password')||'') };
   const status = document.querySelector('#login-message');
-  status.textContent = '';
+  say(status, '');
   try { await finishLogin(); }
   catch (error) {
     if (error.secondFactorRequired) {
@@ -458,6 +559,7 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
       document.querySelector('#mfa-challenge > p').textContent = 'Digite o código do autenticador. Se perdeu o celular, use um código de recuperação salvo no cadastro.';
       document.querySelector('#mfa-challenge-form').reset();
       document.querySelector('#mfa-backup-field').hidden = true;
+      setMfaEmailMode(false);
       document.querySelector('#mfa-digits').hidden = false;
       document.querySelector('#mfa-backup-input').required = false;
       document.querySelector('#mfa-use-backup').textContent = 'Usar código de recuperação';
@@ -467,7 +569,7 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
     } else {
       pendingLogin = null;
       form.elements.password.value = '';
-      status.textContent = error.message;
+      say(status, error.message, 'error');
       form.elements.password.focus();
     }
   }
@@ -484,7 +586,38 @@ document.querySelector('#mfa-digits').addEventListener('paste', event => {
   mfaDigits.forEach((input, index) => { input.value = pasted[index] || ''; });
   mfaDigits[Math.min(pasted.length, 6) - 1]?.focus();
 });
+function setMfaEmailMode(active) {
+  document.querySelector('#mfa-email-field').hidden = !active;
+  document.querySelector('#mfa-email-input').required = active;
+  document.querySelector('#mfa-email-input').value = '';
+  document.querySelector('#mfa-lost').textContent = active ? 'Reenviar código por e-mail' : 'Perdi o autenticador e os códigos de recuperação';
+  if (!active) return;
+  document.querySelector('#mfa-backup-field').hidden = true;
+  document.querySelector('#mfa-backup-input').required = false;
+  document.querySelector('#mfa-digits').hidden = true;
+  mfaDigits.forEach(input => { input.disabled = true; });
+  document.querySelector('#mfa-use-backup').textContent = 'Usar aplicativo autenticador';
+  document.querySelector('#mfa-challenge > p').textContent = 'Digite o código de 6 dígitos que enviamos ao seu e-mail. Em seguida, você vai cadastrar o autenticador de novo.';
+  document.querySelector('#mfa-email-input').focus();
+}
+document.querySelector('#mfa-lost').addEventListener('click', async () => {
+  const status = document.querySelector('#mfa-challenge-message');
+  if (!pendingLogin) { say(status, 'A verificação expirou. Volte ao login e entre novamente.', 'error'); return; }
+  say(status, 'Enviando código para o seu e-mail…', 'progress');
+  try {
+    const result = await request('/api/admin/login', { method:'POST', body:JSON.stringify({ ...pendingLogin, action:'mfa-email-send' }) });
+    setMfaEmailMode(true);
+    say(status, result.message, 'success');
+  } catch (error) {
+    if (!error.secondFactorRequired) pendingLogin = null;
+    say(status, error.message, 'error');
+  }
+});
 document.querySelector('#mfa-use-backup').addEventListener('click', event => {
+  if (!document.querySelector('#mfa-email-field').hidden) {
+    setMfaEmailMode(false);
+    document.querySelector('#mfa-backup-field').hidden = false;
+  }
   const field = document.querySelector('#mfa-backup-field');
   field.hidden = !field.hidden;
   document.querySelector('#mfa-digits').hidden = !field.hidden;
@@ -504,11 +637,13 @@ document.querySelector('#mfa-cancel').addEventListener('click', () => {
 document.querySelector('#mfa-challenge-form').addEventListener('submit', async event => {
   event.preventDefault();
   const status = document.querySelector('#mfa-challenge-message');
-  const code = document.querySelector('#mfa-backup-field').hidden ? mfaDigits.map(input => input.value).join('') : document.querySelector('#mfa-backup-input').value.trim();
-  status.textContent = '';
-  try { await finishLogin(code); }
+  const emailMode = !document.querySelector('#mfa-email-field').hidden;
+  const code = emailMode ? document.querySelector('#mfa-email-input').value.trim()
+    : document.querySelector('#mfa-backup-field').hidden ? mfaDigits.map(input => input.value).join('') : document.querySelector('#mfa-backup-input').value.trim();
+  say(status, 'Verificando…', 'progress');
+  try { await finishLogin(code, emailMode ? 'mfa-email-verify' : undefined); }
   catch (error) {
-    status.textContent = error.message;
+    say(status, error.message, 'error');
     if (!error.secondFactorRequired) pendingLogin = null;
     mfaDigits.forEach(input => { input.value = ''; });
     document.querySelector('#mfa-backup-input').value = '';
@@ -524,21 +659,21 @@ async function startEnrollment() {
   const form = document.querySelector('#mfa-enrollment-begin');
   const status = document.querySelector('#mfa-enrollment-message');
   form.hidden = true;
-  status.textContent = 'Preparando o QR Code…';
+  say(status, 'Preparando o QR Code…', 'progress');
   try {
     const result = await request('/api/admin/mfa', { method:'POST', body:JSON.stringify({ action:'begin' }) });
     document.querySelector('#mfa-enrollment-secret').textContent = result.secret;
     showMfaQr('#mfa-enrollment-secret', result.qrDataUrl);
     document.querySelector('#mfa-enrollment-confirm > p').textContent = '1. Escaneie o QR Code no autenticador. 2. Digite abaixo os seis dígitos que aparecerem no celular.';
     document.querySelector('#mfa-enrollment-confirm').hidden = false;
-    status.textContent = '';
-  } catch (error) { status.textContent = error.message; form.hidden = false; }
+    say(status, '');
+  } catch (error) { say(status, error.message, 'error'); form.hidden = false; }
 }
 document.querySelector('#mfa-enrollment-code').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
   const status = document.querySelector('#mfa-enrollment-message');
-  status.textContent = '';
+  say(status, '');
   try {
     const result = await request('/api/admin/mfa', { method:'POST', body:JSON.stringify({ action:'confirm', code:form.elements.code.value.trim() }) });
     form.reset();
@@ -549,7 +684,7 @@ document.querySelector('#mfa-enrollment-code').addEventListener('submit', async 
     document.querySelector('#mfa-enrollment-backup-codes').textContent = result.backupCodes.join('\n');
     document.querySelector('#mfa-enrollment-backup').hidden = false;
     document.querySelector('#mfa-enrollment-backup > p').textContent = '3. Guarde os três códigos. Se perder o autenticador, escolha “Usar código de recuperação” depois da senha. Um código permitirá cadastrar outro autenticador.';
-  } catch (error) { status.textContent = error.message; }
+  } catch (error) { say(status, error.message, 'error'); }
 });
 document.querySelector('#mfa-enrollment-done').addEventListener('click', () => {
   document.querySelector('#mfa-enrollment-backup-codes').textContent = '';
@@ -593,7 +728,7 @@ document.querySelector('#council-members').addEventListener('click', (event) => 
   render();
   setDirty(true);
 });
-form.addEventListener('input', event => { if (!event.target.closest('#user-editor') && !['page-filter', 'council-filter'].includes(event.target.id)) setDirty(true); });
+form.addEventListener('input', event => { if (!event.target.closest('#user-editor, #mfa-reset-panel') && !['page-filter', 'council-filter'].includes(event.target.id)) setDirty(true); });
 form.addEventListener('change', event => {
   if (event.target.matches('[data-link-group]')) {
     const id = event.target.dataset.linkGroup;
@@ -601,13 +736,13 @@ form.addEventListener('change', event => {
     wrapper.hidden = event.target.value !== '__new__';
     if (!wrapper.hidden) wrapper.querySelector('input')?.focus();
   }
-  if (!event.target.closest('#user-editor') && !['page-filter', 'council-filter'].includes(event.target.id)) setDirty(true);
+  if (!event.target.closest('#user-editor, #mfa-reset-panel') && !['page-filter', 'council-filter'].includes(event.target.id)) setDirty(true);
 });
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const button = document.querySelector('#save-button');
   button.disabled = true;
-  message.textContent = 'Salvando alterações…';
+  say(message, 'Salvando alterações…', 'progress');
   try {
     readFormIntoConfig();
     const pendingName = document.querySelector('[data-link-group] option[value="__new__"]:checked')?.closest('select')?.parentElement?.nextElementSibling?.querySelector('input');
@@ -618,8 +753,8 @@ form.addEventListener('submit', async event => {
     render();
     void loadNotifications();
     setDirty(false);
-    message.textContent = 'Alterações salvas e disponíveis no aplicativo.';
-  } catch (error) { setDirty(true); message.textContent = error.message; }
+    say(message, 'Alterações salvas e disponíveis no aplicativo.', 'success');
+  } catch (error) { setDirty(true); say(message, error.message, 'error'); }
   finally { button.disabled = false; }
 });
 function editorView(group) {
@@ -807,7 +942,7 @@ document.querySelector('#notifications-list').addEventListener('click', async ev
     await request('/api/admin/notifications', { method:'POST', body:JSON.stringify({ id:button.dataset.notificationSeen }) });
     await loadNotifications();
   } catch (error) {
-    status.textContent = error.message;
+    say(status, error.message, 'error');
     button.disabled = false;
   }
 });
@@ -863,13 +998,13 @@ document.querySelector('#account-mfa').addEventListener('click', async () => {
     document.querySelector('#account-mfa-begin button').textContent = result.enabled ? 'Trocar autenticador' : 'Cadastrar autenticador';
     document.querySelector('#account-mfa-confirm').hidden = true;
     document.querySelector('#account-mfa-backup').hidden = true;
-  } catch (error) { status.textContent = error.message; }
+  } catch (error) { say(status, error.message, 'error'); }
 });
 document.querySelector('#account-mfa-begin').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
   const status = document.querySelector('#account-mfa-message');
-  status.textContent = '';
+  say(status, '');
   try {
     const result = await request('/api/admin/mfa', { method:'POST', body:JSON.stringify({ action:'begin', password:form.elements.password.value, proofCode:form.elements.proofCode.value.trim() }) });
     form.reset();
@@ -877,8 +1012,8 @@ document.querySelector('#account-mfa-begin').addEventListener('submit', async ev
     showMfaQr('#account-mfa-secret', result.qrDataUrl);
     document.querySelector('#account-mfa-confirm > p').textContent = 'Escaneie o QR Code no autenticador e confirme com o código gerado.';
     document.querySelector('#account-mfa-confirm').hidden = false;
-    status.textContent = 'Insira a chave no autenticador e confirme com o código gerado.';
-  } catch (error) { status.textContent = error.message; }
+    say(status, 'Insira a chave no autenticador e confirme com o código gerado.');
+  } catch (error) { say(status, error.message, 'error'); }
 });
 document.querySelector('#account-mfa-code-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -894,8 +1029,8 @@ document.querySelector('#account-mfa-code-form').addEventListener('submit', asyn
     document.querySelector('#account-mfa-status').textContent = 'Autenticador ativo. Guarde os novos códigos e entre novamente com o novo fator.';
     document.querySelector('#account-mfa-backup-codes').textContent = result.backupCodes.join('\n');
     document.querySelector('#account-mfa-backup').hidden = false;
-    status.textContent = '';
-  } catch (error) { status.textContent = error.message; }
+    say(status, '');
+  } catch (error) { say(status, error.message, 'error'); }
 });
 document.querySelector('#account-password-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -903,10 +1038,10 @@ document.querySelector('#account-password-form').addEventListener('submit', asyn
   const status = document.querySelector('#account-password-message');
   const currentPassword = passwordForm.elements.currentPassword.value;
   const newPassword = passwordForm.elements.newPassword.value;
-  if (newPassword !== passwordForm.elements.confirmation.value) { status.textContent = 'As novas senhas não conferem.'; return; }
+  if (newPassword !== passwordForm.elements.confirmation.value) { say(status, 'As novas senhas não conferem.', 'error'); return; }
   const saveButton = passwordForm.querySelector('[type="submit"]');
   saveButton.disabled = true;
-  status.textContent = '';
+  say(status, '');
   try {
     await request('/api/admin/me', { method:'PATCH', body:JSON.stringify({ currentPassword, newPassword }) });
     passwordForm.reset();
@@ -915,7 +1050,7 @@ document.querySelector('#account-password-form').addEventListener('submit', asyn
     document.body.classList.remove('panel-open');
     authScreen('login');
     document.querySelector('#login-message').textContent = 'Senha alterada. Entre novamente.';
-  } catch (error) { status.textContent = error.message; }
+  } catch (error) { say(status, error.message, 'error'); }
   finally { saveButton.disabled = false; }
 });
 document.querySelector('#refresh-diagnostics').addEventListener('click', loadDiagnostics);
@@ -959,13 +1094,13 @@ document.querySelectorAll('[data-login]').forEach(button => button.addEventListe
 document.querySelector('#recovery-form').addEventListener('submit', async event => {
   event.preventDefault();
   const status = document.querySelector('#recovery-message');
-  status.textContent = 'Enviando solicitação…';
+  say(status, 'Enviando solicitação…', 'progress');
   try {
     const email = event.currentTarget.elements.email.value.trim();
     const result = await request('/api/admin/recovery', { method:'POST', body:JSON.stringify({ action:recoveryMode, email }) });
-    status.textContent = result.message;
+    say(status, result.message);
     event.currentTarget.reset();
-  } catch (error) { status.textContent = error.message; }
+  } catch (error) { say(status, error.message, 'error'); }
 });
 const resetToken = new URLSearchParams(location.hash.slice(1)).get('token');
 if (resetToken) {
@@ -982,13 +1117,13 @@ document.querySelector('#reset-form').addEventListener('submit', async event => 
   event.preventDefault();
   const status = document.querySelector('#reset-message');
   const password = event.currentTarget.elements.password.value;
-  if (password !== event.currentTarget.elements.confirmation.value) { status.textContent = 'As senhas não conferem.'; return; }
-  status.textContent = 'Salvando…';
+  if (password !== event.currentTarget.elements.confirmation.value) { say(status, 'As senhas não conferem.', 'error'); return; }
+  say(status, 'Salvando…', 'progress');
   try {
     await request('/api/admin/recovery', { method:'POST', body:JSON.stringify({ action:'reset', token:resetToken, password }) });
     event.currentTarget.reset();
-    status.textContent = 'Senha definida. Volte ao login para entrar.';
-  } catch (error) { status.textContent = error.message; }
+    say(status, 'Senha definida. Volte ao login para entrar.', 'success');
+  } catch (error) { say(status, error.message, 'error'); }
 });
 
 async function loadUsers() {
@@ -998,12 +1133,12 @@ async function loadUsers() {
   try {
     const result = await request('/api/admin/users');
     mailAvailable = result.mailAvailable === true;
-    list.innerHTML = result.users.length ? result.users.map(user => `<div class="user-row"><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.username)} · ${escapeHtml(user.email)}</small></div><span>${escapeHtml(user.sector)}</span><span>${user.role === 'admin' ? 'Administrador' : user.role === 'editor' ? 'Editor de setor' : 'Consulta'}</span><span class="user-status ${user.ready && user.active ? '' : 'pending'}">${!user.active ? 'Desativado' : user.ready ? 'Ativo' : 'Convite pendente'}</span><div><button type="button" data-edit-user="${user.id}">Editar</button>${!user.ready && user.active && mailAvailable ? `<button type="button" data-invite-user="${user.id}">Reenviar convite</button>` : ''}${user.active ? `<button type="button" data-manual-user="${user.id}">Gerar link seguro</button>` : ''}${user.active && user.ready && user.id !== sessionAccountId ? `<button type="button" data-reset-mfa-user="${user.id}">Redefinir autenticador</button>` : ''}</div></div>`).join('') : '<p>Nenhum usuário cadastrado. As contas antigas de ambiente continuam disponíveis durante a transição.</p>';
+    list.innerHTML = result.users.length ? result.users.map(user => `<div class="user-row"><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.username)} · ${escapeHtml(user.email)}</small></div><span>${escapeHtml(user.sector)}</span><span>${user.role === 'admin' ? 'Administrador' : user.role === 'editor' ? 'Editor de setor' : 'Consulta'}</span><span class="user-status ${user.ready && user.active ? '' : 'pending'}">${!user.active ? 'Desativado' : user.ready ? 'Ativo' : 'Convite pendente'}</span><div><button type="button" data-edit-user="${user.id}">Editar</button>${!user.ready && user.active && mailAvailable ? `<button type="button" data-invite-user="${user.id}">Reenviar convite</button>` : ''}${user.active ? `<button type="button" data-manual-user="${user.id}">Gerar link seguro</button>` : ''}${user.active && user.ready && user.id !== sessionAccountId ? `<button type="button" data-reset-mfa-user="${user.id}">Redefinir autenticador</button>` : ''}</div></div>`).join('') : '<p>Nenhum usuário cadastrado ainda. Use “+ Novo usuário” para criar o primeiro.</p>';
     list._users = result.users;
-    const activityLabels = { 'user.create':'Usuário criado', 'user.create.manual':'Usuário criado com entrega pessoal', 'user.manual.invite':'Link de convite gerado', 'user.manual.reset':'Link de recuperação gerado', 'user.mfa.reset':'Autenticador redefinido', 'user.update':'Usuário atualizado', 'user.invite':'Convite reenviado', 'config.update':'Conteúdo atualizado', 'recovery.password':'Redefinição solicitada', 'recovery.username':'Usuário solicitado' };
+    const activityLabels = { 'user.create':'Usuário criado', 'user.create.manual':'Usuário criado com entrega pessoal', 'user.manual.invite':'Link de convite gerado', 'user.manual.reset':'Link de recuperação gerado', 'user.mfa.reset':'Autenticador redefinido', 'account.mfa.email-reset':'Autenticador trocado pelo e-mail', 'account.mfa.enabled':'Autenticador cadastrado', 'account.password':'Senha alterada', 'user.update':'Usuário atualizado', 'user.invite':'Convite reenviado', 'config.update':'Conteúdo atualizado', 'recovery.password':'Redefinição solicitada', 'recovery.username':'Usuário solicitado' };
     document.querySelector('#users-activity').innerHTML = result.activity?.length ? result.activity.map(item => `<div><strong>${escapeHtml(activityLabels[item.action] || item.action)}</strong><span>${escapeHtml(item.actor)} · ${new Date(item.at).toLocaleString('pt-BR')}</span></div>`).join('') : '<p>Nenhuma atividade recente.</p>';
-    status.textContent = '';
-  } catch (error) { list.textContent = ''; status.textContent = error.message; }
+    say(status, '');
+  } catch (error) { list.textContent = ''; say(status, error.message, 'error'); }
 }
 function editUser(user = null) {
   editingUserId = user?.id || null;
@@ -1022,6 +1157,14 @@ function editUser(user = null) {
   document.querySelector('#user-editor').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 document.querySelector('#new-user').addEventListener('click', () => editUser());
+// Sugere o nome de usuário a partir do e-mail (parte antes do @, sem acentos) enquanto o campo estiver vazio ou sugerido.
+document.querySelector('#user-email').addEventListener('input', event => {
+  const username = document.querySelector('#user-username');
+  if (editingUserId || (username.value && username.dataset.suggested !== username.value)) return;
+  const suggestion = event.target.value.split('@')[0].normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 80);
+  username.value = suggestion;
+  username.dataset.suggested = suggestion;
+});
 document.querySelector('#user-delivery').addEventListener('change', event => { if (!editingUserId) document.querySelector('#save-user').textContent = event.target.value === 'manual' ? 'Criar usuário e gerar link' : 'Criar usuário e enviar convite'; });
 document.querySelector('#cancel-user').addEventListener('click', () => { document.querySelector('#user-editor').hidden = true; });
 document.querySelector('#user-editor').addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
@@ -1048,8 +1191,8 @@ document.querySelector('#users-list').addEventListener('click', async event => {
     if (!user) return;
     document.querySelector('#mfa-reset-user').textContent = user.name;
     document.querySelector('#mfa-reset-id').value = user.id;
-    document.querySelector('#mfa-reset-form').reset();
-    document.querySelector('#mfa-reset-message').textContent = '';
+    clearMfaResetFields();
+    say(document.querySelector('#mfa-reset-message'), '');
     document.querySelector('#mfa-reset-panel').hidden = false;
     document.querySelector('#mfa-reset-panel').scrollIntoView({ behavior:'smooth', block:'center' });
     return;
@@ -1057,33 +1200,50 @@ document.querySelector('#users-list').addEventListener('click', async event => {
   const manual = event.target.closest('[data-manual-user]');
   if (manual) {
     const status = document.querySelector('#users-message');
-    try { const result = await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'manual-link', id:manual.dataset.manualUser }) }); showManualLink(result.url, result.expiresInHours); status.textContent = 'Link gerado. Confirme a identidade da pessoa antes de entregar.'; }
-    catch (error) { status.textContent = error.message; }
+    try { const result = await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'manual-link', id:manual.dataset.manualUser }) }); showManualLink(result.url, result.expiresInHours); say(status, 'Link gerado. Confirme a identidade da pessoa antes de entregar.', 'success'); }
+    catch (error) { say(status, error.message, 'error'); }
     return;
   }
   const invite = event.target.closest('[data-invite-user]');
   if (!invite) return;
   const status = document.querySelector('#users-message');
-  try { await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'resend', id:invite.dataset.inviteUser }) }); status.textContent = 'Convite reenviado.'; }
-  catch (error) { status.textContent = error.message; }
+  try { await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'resend', id:invite.dataset.inviteUser }) }); say(status, 'Convite reenviado.', 'success'); }
+  catch (error) { say(status, error.message, 'error'); }
 });
+// A confirmação fica dentro do formulário de configurações; por isso usa um bloco comum em vez de outro <form>.
+function clearMfaResetFields() {
+  document.querySelector('#mfa-reset-password').value = '';
+  document.querySelector('#mfa-reset-code').value = '';
+}
 document.querySelector('#cancel-mfa-reset').addEventListener('click', () => {
-  document.querySelector('#mfa-reset-form').reset();
+  clearMfaResetFields();
   document.querySelector('#mfa-reset-panel').hidden = true;
 });
-document.querySelector('#mfa-reset-form').addEventListener('submit', async event => {
+document.querySelector('#mfa-reset-form').addEventListener('keydown', event => {
+  if (event.key !== 'Enter' || event.target.tagName !== 'INPUT') return;
   event.preventDefault();
-  const form = event.currentTarget;
+  document.querySelector('#confirm-mfa-reset').click();
+});
+document.querySelector('#confirm-mfa-reset').addEventListener('click', async () => {
   const status = document.querySelector('#mfa-reset-message');
-  status.textContent = 'Confirmando…';
+  const password = document.querySelector('#mfa-reset-password').value;
+  const code = document.querySelector('#mfa-reset-code').value.trim();
+  if (!password || !/^\d{6}$/.test(code)) { say(status, 'Informe sua senha atual e os 6 dígitos do seu autenticador.', 'error'); return; }
+  say(status, 'Confirmando…', 'progress');
   try {
-    const result = await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'reset-mfa', id:document.querySelector('#mfa-reset-id').value, password:form.elements.password.value, code:form.elements.code.value }) });
-    form.reset();
+    const result = await request('/api/admin/users', { method:'POST', body:JSON.stringify({ action:'reset-mfa', id:document.querySelector('#mfa-reset-id').value, password, code }) });
+    clearMfaResetFields();
     document.querySelector('#mfa-reset-panel').hidden = true;
     await loadUsers();
     showManualLink(result.url, result.expiresInHours);
-    document.querySelector('#users-message').textContent = 'Senha antiga e autenticador revogados. Entregue o link após confirmar a identidade da pessoa.';
-  } catch (error) { status.textContent = error.message; }
+    say(document.querySelector('#users-message'), result.emailed ? 'Senha antiga e autenticador revogados. O link também foi enviado ao e-mail da pessoa.' : 'Senha antiga e autenticador revogados. Entregue o link após confirmar a identidade da pessoa.', 'success');
+  } catch (error) { say(status, error.message, 'error'); }
+});
+// O cadastro fica dentro do formulário de configurações: Enter salva o usuário, não as configurações.
+document.querySelector('#user-editor').addEventListener('keydown', event => {
+  if (event.key !== 'Enter' || event.target.tagName !== 'INPUT') return;
+  event.preventDefault();
+  document.querySelector('#save-user').click();
 });
 document.querySelector('#save-user').addEventListener('click', async () => {
   const status = document.querySelector('#user-editor-message');
@@ -1092,12 +1252,12 @@ document.querySelector('#save-user').addEventListener('click', async () => {
   data.active = document.querySelector('#user-active').value === 'true';
   if (!editingUserId) data.delivery = document.querySelector('#user-delivery').value;
   if (editingUserId) data.id = editingUserId;
-  status.textContent = 'Salvando…';
+  say(status, 'Salvando…', 'progress');
   try {
     const result = await request('/api/admin/users', { method:editingUserId ? 'PUT' : 'POST', body:JSON.stringify(data) });
     document.querySelector('#user-editor').hidden = true;
     await loadUsers();
     if (result.url) showManualLink(result.url, result.expiresInHours);
-    document.querySelector('#users-message').textContent = editingUserId ? 'Usuário atualizado.' : result.url ? 'Usuário criado. Entregue o link após confirmar a identidade da pessoa.' : 'Usuário criado e convite enviado.';
-  } catch (error) { status.textContent = error.message; await loadUsers(); }
+    say(document.querySelector('#users-message'), editingUserId ? 'Usuário atualizado.' : result.url ? 'Usuário criado. Entregue o link após confirmar a identidade da pessoa.' : 'Usuário criado e convite enviado.', 'success');
+  } catch (error) { say(status, error.message, 'error'); await loadUsers(); }
 });

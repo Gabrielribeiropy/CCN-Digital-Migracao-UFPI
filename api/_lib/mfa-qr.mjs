@@ -14,6 +14,6 @@ export function mfaQrDataUrl(uri) {
       if (pixels[y * size + x]) cells.push(`M${x + margin} ${y + margin}h1v1h-1z`);
     }
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><path fill="#fff" d="M0 0h${total}v${total}H0z"/><path fill="#0a3055" d="${cells.join('')}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><path fill="#fff" d="M0 0h${total}v${total}H0z"/><path fill="#000" d="${cells.join('')}"/></svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }

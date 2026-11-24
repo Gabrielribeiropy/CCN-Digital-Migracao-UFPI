@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeOwnPassword, validateUser } from '../api/_lib/admin-users.mjs';
+import { changeOwnPassword, UserInputError, validateUser } from '../api/_lib/admin-users.mjs';
 import { allowedChanges } from '../api/admin/config.mjs';
 import recoveryHandler from '../api/admin/recovery.mjs';
 import { randomUUID } from 'node:crypto';
@@ -13,8 +13,15 @@ test('contas exigem dados válidos e área para editor', () => {
   assert.throws(() => validateUser({ ...valid, areas:['areas'] }), /área/);
   assert.throws(() => validateUser({ ...valid, areas:[] }), /área/);
   assert.throws(() => validateUser({ ...valid, email:'sem-email' }), /Confira/);
-  assert.throws(() => validateUser({ ...valid, email:'ana@exemplo.com' }), /institucional/);
+  assert.equal(validateUser({ ...valid, email:'ana@gmail.com' }).email, 'ana@gmail.com');
   assert.throws(() => validateUser({ ...valid, role:'developer' }), /Confira/);
+});
+
+test('todo erro de preenchimento chega à tela como UserInputError', () => {
+  const valid = { name:'Ana Silva', username:'ana.silva', email:'ana@ufpi.edu.br', sector:'Matemática', role:'viewer', areas:[] };
+  for (const invalid of [{ email:'ana@' }, { username:'Ána' }, { sector:'' }, { name:'' }, { role:'editor' }]) {
+    assert.throws(() => validateUser({ ...valid, ...invalid }), UserInputError);
+  }
 });
 
 test('troca da própria senha exige senha atual e nova senha longa', async () => {

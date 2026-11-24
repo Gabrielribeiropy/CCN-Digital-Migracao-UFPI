@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { query, transaction } from './postgres-store.mjs';
-import { createInstitutionalMailer } from './institutional-mail.mjs';
+import { institutionalMailSettings, sendInstitutionalMail } from './institutional-mail.mjs';
 
 export const ADMIN_AREAS = ['home', 'pages', 'services', 'restricted', 'council', 'news', 'settings'];
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
@@ -65,6 +65,9 @@ export async function authenticateUser(identifier, password) {
   return { id: user.id, username: user.username, role: user.role, areas: user.areas, authVersion: user.auth_version };
 }
 
+// Erro de preenchimento: a mensagem é segura para mostrar a quem está cadastrando.
+export class UserInputError extends Error {}
+
 export function validateUser(input) {
   const name = String(input?.name || '').trim().slice(0, 160);
   const username = String(input?.username || '').trim().toLowerCase();
@@ -72,11 +75,13 @@ export function validateUser(input) {
   const sector = String(input?.sector || '').trim().slice(0, 100);
   const role = String(input?.role || 'viewer');
   const areas = [...new Set(Array.isArray(input?.areas) ? input.areas.filter(x => ADMIN_AREAS.includes(x)) : [])];
-  if (name.length < 2 || !/^[a-z0-9._-]{3,80}$/.test(username) || !EMAIL.test(email) || email.length > 254 || sector.length < 2 || !['admin', 'editor', 'viewer'].includes(role)) throw new Error('Confira nome, usuário, e-mail, setor e perfil.');
-  const domains = String(process.env.CCN_ADMIN_EMAIL_DOMAINS || 'ufpi.edu.br').toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
-  if (!domains.includes(email.split('@')[1])) throw new Error('Use um e-mail institucional autorizado.');
-  if ([process.env.CCN_ADMIN_USERNAME, process.env.CCN_DEVELOPER_USERNAME].filter(Boolean).some(value => value.toLowerCase() === username)) throw new Error('Este nome de usuário está reservado.');
-  if (role === 'editor' && !areas.length) throw new Error('Selecione ao menos uma área para o editor.');
+  if (name.length < 2) throw new UserInputError('Confira o nome completo.');
+  if (!EMAIL.test(email) || email.length > 254) throw new UserInputError('Confira o e-mail.');
+  if (!/^[a-z0-9._-]{3,80}$/.test(username)) throw new UserInputError('Confira o nome de usuário: de 3 a 80 caracteres, só letras sem acento, números, ponto, hífen ou sublinhado.');
+  if (sector.length < 2) throw new UserInputError('Confira o setor.');
+  if (!['admin', 'editor', 'viewer'].includes(role)) throw new UserInputError('Confira o perfil.');
+  if ([process.env.CCN_ADMIN_USERNAME, process.env.CCN_DEVELOPER_USERNAME].filter(Boolean).some(value => value.toLowerCase() === username)) throw new UserInputError('Este nome de usuário está reservado.');
+  if (role === 'editor' && !areas.length) throw new UserInputError('Selecione ao menos uma área para o editor.');
   return { name, username, email, sector, role, areas: role === 'admin' ? ADMIN_AREAS : areas };
 }
 
@@ -92,7 +97,7 @@ export async function updateUser(id, input) {
   const { rows } = await query("SELECT count(*)::integer AS total FROM ccn_admin_users WHERE role='admin' AND active=TRUE AND id<>$1", [id]);
   if ((user.role !== 'admin' || input.active === false) && rows[0].total === 0) {
     const { rows: target } = await query('SELECT role, active FROM ccn_admin_users WHERE id=$1', [id]);
-    if (target[0]?.role === 'admin' && target[0]?.active) throw new Error('Mantenha pelo menos um administrador ativo.');
+    if (target[0]?.role === 'admin' && target[0]?.active) throw new UserInputError('Mantenha pelo menos um administrador ativo.');
   }
   const { rowCount } = await query('UPDATE ccn_admin_users SET name=$2, username=$3, email=$4, sector=$5, role=$6, areas=$7, active=$8, auth_version=auth_version+1, updated_at=NOW() WHERE id=$1', [id, user.name, user.username, user.email, user.sector, user.role, user.areas, input.active !== false]);
   return rowCount === 1;
@@ -130,18 +135,30 @@ export async function findRecoveryUser(email) {
 
 export function accessLink(token) {
   const origin = process.env.CCN_PUBLIC_ORIGIN;
-  if (!origin || new URL(origin).protocol !== 'https:') throw new Error('Origem HTTPS institucional não configurada.');
+  if (!origin || new URL(origin).protocol !== 'https:') throw new UserInputError('O endereço público do painel ainda não foi configurado no servidor. Avise o suporte técnico.');
   return `${origin.replace(/\/$/, '')}/admin#token=${encodeURIComponent(token)}`;
 }
 
 export async function sendAccessEmail(user, purpose, token) {
-  const mailer = await createInstitutionalMailer();
-  try {
-    const url = accessLink(token);
-    const subject = purpose === 'invite' ? 'Convite para o painel CCN Digital' : 'Redefinição de senha — CCN Digital';
-    const intro = purpose === 'invite' ? 'Você recebeu um convite para o painel CCN Digital.' : 'Foi solicitada a redefinição da sua senha no painel CCN Digital.';
-    await mailer.send({ to: user.email, subject, text: `${intro}\n\nAbra o link para definir sua senha:\n${url}\n\nO link é individual e expira em ${purpose === 'invite' ? '48 horas' : '1 hora'}. Se você não solicitou esta mensagem, ignore-a.`, headers: { 'X-Auto-Response-Suppress': 'All' } });
-  } finally { mailer.close(); }
+  const url = accessLink(token);
+  const invite = purpose === 'invite';
+  await sendInstitutionalMail(user.email, invite ? 'Convite para o painel CCN Digital' : 'Redefinição de senha — CCN Digital', {
+    title: invite ? 'Seu acesso ao painel' : 'Redefinir sua senha',
+    name: user.name,
+    paragraphs: invite
+      ? ['Você foi cadastrado no painel administrativo do aplicativo CCN Digital.', `Seu nome de usuário é ${user.username}. Clique no botão abaixo para criar sua senha. Depois, o painel vai pedir que você cadastre um aplicativo autenticador no celular.`]
+      : ['Recebemos um pedido para redefinir a senha da sua conta no painel CCN Digital.', `Seu nome de usuário é ${user.username}. Clique no botão abaixo para escolher uma nova senha.`],
+    action: { label: invite ? 'Criar minha senha' : 'Escolher nova senha', url },
+    note: `O link é pessoal e vale por ${invite ? '48 horas' : '1 hora'}. Não o encaminhe a outras pessoas.`,
+  });
+}
+
+// Aviso opcional de alteração na conta: sem SMTP configurado, nada é enviado e a operação segue normalmente.
+export async function notifyAccountChange(user, subject, content) {
+  if (!user?.email) return false;
+  try { institutionalMailSettings(); } catch { return false; }
+  try { await sendInstitutionalMail(user.email, subject, { name: user.name, ...content }); return true; }
+  catch (error) { console.error('[admin/mail]', error instanceof Error ? error.message : error); return false; }
 }
 
 export async function logActivity(actorId, action, targetId = null) {
@@ -150,5 +167,5 @@ export async function logActivity(actorId, action, targetId = null) {
 
 export async function listActivity() {
   const { rows } = await query('SELECT a.action, a.created_at, u.name AS actor_name FROM ccn_admin_activity a LEFT JOIN ccn_admin_users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 30');
-  return rows.map(row => ({ action: row.action, actor: row.actor_name || 'Conta de transição', at: row.created_at }));
+  return rows.map(row => ({ action: row.action, actor: row.actor_name || 'Administrador principal', at: row.created_at }));
 }

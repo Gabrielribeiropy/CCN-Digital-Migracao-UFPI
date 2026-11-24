@@ -69,7 +69,7 @@ function response() {
 
 async function login(ip, password, username = 'admin', code = '') {
   const result = response();
-  await handler({ method: 'POST', headers: { 'x-ccn-client-ip': ip, host: 'example.org' }, body: { username, password, code } }, result);
+  await handler({ method: 'POST', headers: { 'x-vercel-forwarded-for': ip, host: 'example.org' }, body: { username, password, code } }, result);
   return result;
 }
 

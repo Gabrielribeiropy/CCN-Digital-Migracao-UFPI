@@ -40,7 +40,7 @@ test('primeiro acesso exige cadastro TOTP, fornece backup e invalida código usa
     return { ok: true, json: async () => ({ result }) };
   };
   const makeResponse = () => ({ headers: {}, statusCode: 200, setHeader(key, value) { this.headers[key] = value; return this; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
-  const request = (method, body = {}, cookie = '', ip = '203.0.113.80') => ({ method, body, headers: { host: 'example.org', origin: 'https://example.org', 'x-ccn-client-ip': ip, cookie } });
+  const request = (method, body = {}, cookie = '', ip = '203.0.113.80') => ({ method, body, headers: { host: 'example.org', origin: 'https://example.org', 'x-vercel-forwarded-for': ip, cookie } });
   const doLogin = async (code, ip) => { const response = makeResponse(); await login(request('POST', { username: 'admin', password: 'test-password', code }, '', ip), response); return response; };
   try {
     const first = await doLogin('');

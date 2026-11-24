@@ -30,6 +30,11 @@ input::placeholder{color:#8ea0ae}
 .primary-button{min-height:46px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:10px 19px;font-size:13px;font-weight:850}
 .primary-button:hover{background:#064c90}
 .message{font-size:12px;font-weight:800;color:var(--blue);line-height:1.5}
+.message[data-tone]:not(:empty){display:flex;gap:7px;align-items:baseline;padding:7px 10px;border-radius:8px;border:1px solid;font-size:12.5px;font-weight:550}
+.message[data-tone=error]:not(:empty){color:#b42318;background:#fff6f5;border-color:#f6d0cc}
+.message[data-tone=error]:not(:empty)::before{content:"!";flex:none;align-self:center;display:grid;place-items:center;width:14px;height:14px;border-radius:50%;background:#d92d20;color:#fff;font-size:9.5px;font-weight:800;line-height:1}
+.message[data-tone=success]:not(:empty){color:#17633a;background:#f3fbf6;border-color:#cdebd8}
+.message[data-tone=progress]:not(:empty){color:var(--muted);background:#f4f7fa;border-color:var(--line)}
 .workspace{display:grid;grid-template-columns:232px minmax(0,1fr);gap:35px;align-items:start}
 .sidebar{position:sticky;top:22px;background:#fff;border:1px solid var(--line);border-radius:19px;padding:17px 10px;box-shadow:0 12px 34px #082b5009}
 .sidebar-caption{padding:9px 13px 12px;color:#8196a8;font-size:9px;font-weight:950;letter-spacing:.15em}
@@ -361,7 +366,10 @@ label,.field-grid label{font-size:14px;font-weight:600}
 .mfa-challenge-actions button{min-height:42px;padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--blue);font-size:14px;font-weight:650}
 .mfa-challenge-actions #mfa-use-backup{margin-right:auto;border:0;text-decoration:underline}
 .mfa-challenge-actions .primary-button{background:var(--gold);border-color:var(--gold);color:#112237}
-#mfa-backup-field[hidden],#mfa-digits[hidden],#mfa-enrollment-confirm[hidden],#mfa-enrollment-backup[hidden],#account-mfa-backup[hidden]{display:none!important}
+.mfa-lost{display:block;margin:14px auto 0;padding:6px;border:0;background:none;color:var(--muted);font-size:13px;text-decoration:underline;cursor:pointer}
+.mfa-lost:hover{color:var(--blue)}
+#mfa-email-input{text-align:center;font:700 26px/1 Consolas,monospace!important;letter-spacing:.35em}
+#mfa-email-field[hidden],#mfa-backup-field[hidden],#mfa-digits[hidden],#mfa-enrollment-confirm[hidden],#mfa-enrollment-backup[hidden],#account-mfa-backup[hidden]{display:none!important}
 #account-mfa-proof[hidden]{display:none!important}
 #mfa-enrollment.auth-card{width:min(590px,100%);padding:28px;border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 44px #0b315415}
 #mfa-enrollment-secret{display:block;padding:12px;border:1px solid var(--line);border-radius:8px;background:#f7fbff;overflow-wrap:anywhere;font-size:17px;letter-spacing:.08em}
@@ -376,11 +384,71 @@ label,.field-grid label{font-size:14px;font-weight:600}
 .mfa-manual{margin:10px 0 16px;font-size:13px;color:var(--blue)}
 .mfa-manual summary{cursor:pointer;font-weight:700}
 .mfa-manual code{margin-top:9px}
+.mfa-copy-key{width:100%;min-height:40px;margin-top:8px}
 .mfa-reset-panel{margin:18px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:#f5fafc}
 .mfa-reset-panel h3{margin:0 0 8px;font-size:18px;color:var(--navy)}
 .mfa-reset-panel p{max-width:65ch;line-height:1.5}
-.mfa-reset-panel form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
-.mfa-reset-panel form label{display:grid;gap:6px}
-.mfa-reset-panel form input{min-height:42px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}
+.mfa-reset-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+.mfa-reset-fields label{display:grid;gap:6px}
+.mfa-reset-fields input{min-height:42px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}
 .mfa-reset-panel .editor-actions{grid-column:1/-1}
-@media(max-width:650px){.mfa-reset-panel form{grid-template-columns:1fr}}
+@media(max-width:650px){.mfa-reset-fields{grid-template-columns:1fr}}
+/* Tutorial de primeiro acesso */
+.tour[hidden]{display:none!important}
+.tour{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:flex-end;padding:28px;background:#082b5038}
+.tour-card{width:min(440px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:22px 24px 20px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 24px 60px #082b5040;animation:tour-in .22s ease-out}
+.tour-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.tour-kicker{color:var(--blue);font-size:11px;font-weight:900;letter-spacing:.14em}
+.tour-skip{padding:4px 2px;border:0;background:none;color:var(--muted);font-size:13px;text-decoration:underline;cursor:pointer}
+.tour-skip:hover{color:var(--blue)}
+.tour-heading{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.tour-icon{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:12px;background:#e6f1fb;color:var(--blue)}
+.tour-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.tour-heading h2{margin:0;color:var(--navy);font-size:21px;line-height:1.2}
+.tour-text{margin:0 0 12px;color:var(--ink);font-size:15px;line-height:1.55}
+.tour-tips{display:grid;gap:7px;margin:0 0 18px;padding:12px 14px 12px 30px;border-radius:10px;background:var(--soft);color:var(--muted);font-size:13px;line-height:1.45}
+.tour-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.tour-dots{display:flex;gap:6px}
+.tour-dots span{width:7px;height:7px;border-radius:50%;background:#cbdbe9;transition:width .2s}
+.tour-dots span.active{width:20px;border-radius:4px;background:var(--blue)}
+.tour-nav{display:flex;gap:8px;margin-left:auto}
+.tour-nav button{min-height:42px}
+.tour-nav .secondary-button[hidden]{display:none}
+#panel-nav .tour-focus{position:relative;outline:3px solid #f4c430;outline-offset:2px;border-radius:10px;animation:tour-pulse 1.6s ease-in-out infinite}
+.sidebar-tour{display:block;margin:13px 0 0 51px;padding:4px 0;border:0;background:none;color:#d4e8f6;font-size:14px}
+.sidebar-tour:hover{text-decoration:underline;color:#fff}
+@keyframes tour-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes tour-pulse{50%{outline-color:#f4c43066}}
+/* No celular o tutorial não aparece: ele depende do menu lateral fixo da versão para computador. */
+@media(max-width:900px){.tour,[data-tour-open]{display:none!important}#panel-nav .tour-focus{outline:0;animation:none}}
+@media(prefers-reduced-motion:reduce){.tour-card,#panel-nav .tour-focus{animation:none}}
+/* Assinatura Averotech (padrão dos sites desenvolvidos pela Averotech) */
+.averotech-credit{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;width:fit-content;margin:22px auto 0;color:var(--muted);font-size:12.5px;font-weight:500;line-height:1.4;text-decoration:none}
+.averotech-credit strong{position:relative;padding-right:7px;color:#0a0a0a;font-weight:800;letter-spacing:-.02em;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.averotech-dot{position:absolute;top:0;right:0;width:5px;height:5px;border:1.5px solid #1f4fff;border-radius:50%}
+.averotech-arrow{font-size:13px;color:#1f4fff;transition:transform .15s}
+.averotech-credit:hover strong{color:#1f4fff}
+.averotech-credit:hover .averotech-arrow{transform:translate(2px,-2px)}
+.averotech-credit:focus-visible{outline:2px solid #1f4fff;outline-offset:3px;border-radius:4px}
+/* Topo do painel no celular: logo e conta na mesma linha, menu de áreas logo abaixo. */
+@media(max-width:980px){
+  .sidebar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;margin:0;padding:12px 16px 8px}
+  .sidebar-brand{grid-column:1;grid-row:1;min-width:0;padding:0;gap:10px}
+  .sidebar-logo-badge{width:42px;height:42px;border-radius:11px;box-shadow:0 2px 8px #001c3540}
+  .sidebar-logo-crop{width:36px;height:34px}
+  .sidebar-logo-crop img{width:79px;height:34px}
+  .sidebar-brand strong{font-size:18px;white-space:nowrap}
+  .sidebar-footer{grid-column:2;grid-row:1;display:flex;align-items:center;gap:10px;margin:0;padding:0;border:0}
+  .sidebar-account{display:none}
+  .panel-header .header-avatar{display:grid;width:38px;height:38px}
+  .panel-header .header-avatar svg{width:19px;height:19px}
+  .sidebar-logout{margin:0;padding:6px 10px;border:1px solid #ffffff38;border-radius:8px;font-size:12.5px;line-height:1.2}
+  .panel-nav{grid-column:1/-1;margin-top:12px}
+}
+/* Celular: avisos e menu da conta ocupam a largura da barra, sem sair da tela. */
+@media(max-width:600px){
+  .panel-tools{position:relative}
+  .notification-wrap,.account-menu-wrap{position:static}
+  .notifications-panel,.account-menu{left:0;right:0;width:auto;max-height:70vh}
+  .notifications-panel{padding:15px}
+}

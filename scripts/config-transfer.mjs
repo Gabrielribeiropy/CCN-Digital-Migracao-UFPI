@@ -5,7 +5,7 @@ const KEY = 'ccn-mobile:app-config:v1';
 const [action, path, confirmation] = process.argv.slice(2);
 if (!['export', 'import'].includes(action) || !path || !kvReady()) {
   console.error('Uso: node scripts/config-transfer.mjs export|import CAMINHO [--apply]');
-  console.error('Configure DATABASE_URL no ambiente privado.');
+  console.error('Configure DATABASE_URL, REDIS_URL ou KV_REST_API_URL e KV_REST_API_TOKEN no ambiente.');
   process.exit(2);
 }
 

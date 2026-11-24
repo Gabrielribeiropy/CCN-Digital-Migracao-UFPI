@@ -1,5 +1,5 @@
 import { clearSession, currentAdmin } from '../admin-auth.mjs';
-import { changeOwnPassword, findOwnProfile, logActivity } from '../admin-users.mjs';
+import { changeOwnPassword, findOwnProfile, logActivity, notifyAccountChange } from '../admin-users.mjs';
 import { limitAdminRequest, sameOrigin } from '../admin-request.mjs';
 
 export default async function handler(request, response) {
@@ -23,6 +23,11 @@ export default async function handler(request, response) {
     if (!changed) return response.status(400).json({ error: 'Senha atual incorreta.' });
     await clearSession(request, response).catch(() => {});
     void logActivity(actor.id, 'account.password').catch(() => {});
+    await notifyAccountChange(await findOwnProfile(actor.id), 'Sua senha foi alterada — CCN Digital', {
+      title: 'Senha alterada',
+      paragraphs: ['A senha da sua conta no painel CCN Digital acabou de ser alterada. Use a nova senha no próximo acesso.'],
+      note: 'Se não foi você, use "Esqueci minha senha" na tela de login e avise a coordenação do CCN.',
+    });
     return response.status(200).json({ ok: true });
   } catch (error) {
     if (error?.message?.startsWith('Informe a senha')) return response.status(400).json({ error: error.message });

@@ -13,11 +13,9 @@ import logout from '../api/admin/logout.mjs';
 import adminConfig from '../api/admin/config.mjs';
 import health from '../api/admin/health.mjs';
 import diagnostics from '../api/admin/diagnostics.mjs';
-import me from '../api/_lib/handlers/me.mjs';
 import users from '../api/admin/users.mjs';
 import recovery from '../api/admin/recovery.mjs';
-import notifications from '../api/_lib/handlers/notifications.mjs';
-import mfa from '../api/_lib/handlers/mfa.mjs';
+import { sharedAdminRoutes } from '../api/_lib/shared-admin-routes.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const handlers = new Map([
@@ -25,7 +23,8 @@ const handlers = new Map([
   ['/api/portal', portal],
   ['/api/admin/login', login], ['/api/admin/logout', logout],
   ['/api/admin/config', adminConfig], ['/api/admin/health', health], ['/api/admin/diagnostics', diagnostics],
-  ['/api/admin/me', me], ['/api/admin/users', users], ['/api/admin/recovery', recovery], ['/api/admin/notifications', notifications], ['/api/admin/mfa', mfa],
+  ['/api/admin/users', users], ['/api/admin/recovery', recovery],
+  ...sharedAdminRoutes.map(({ path, handler }) => [path, handler]),
 ]);
 const mime = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -39,11 +38,11 @@ function prepareHeaders(request) {
   // O servidor escuta no loopback. O proxy deve sobrescrever X-Real-IP.
   const realIp = process.env.CCN_TRUST_PROXY === 'loopback' && loopback(request.socket.remoteAddress)
     ? String(request.headers['x-real-ip'] || '') : '';
-  delete request.headers['x-ccn-client-ip'];
+  delete request.headers['x-vercel-forwarded-for'];
   delete request.headers['x-forwarded-for'];
   delete request.headers['x-forwarded-host'];
   delete request.headers['x-forwarded-proto'];
-  request.headers['x-ccn-client-ip'] = isIP(realIp) ? realIp : request.socket.remoteAddress;
+  request.headers['x-vercel-forwarded-for'] = isIP(realIp) ? realIp : request.socket.remoteAddress;
   if (process.env.CCN_PUBLIC_ORIGIN) {
     const publicOrigin = new URL(process.env.CCN_PUBLIC_ORIGIN);
     if (publicOrigin.protocol !== 'https:' && publicOrigin.hostname !== 'localhost') throw new Error('CCN_PUBLIC_ORIGIN deve usar HTTPS.');

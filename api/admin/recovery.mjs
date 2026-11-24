@@ -1,6 +1,6 @@
 import { findRecoveryUser, issueAccessToken, sendAccessEmail, consumeAccessToken, logActivity } from '../_lib/admin-users.mjs';
 import { sameOrigin, limitAdminRequest } from '../_lib/admin-request.mjs';
-import { institutionalMailSettings } from '../_lib/institutional-mail.mjs';
+import { institutionalMailSettings, sendInstitutionalMail } from '../_lib/institutional-mail.mjs';
 
 export function resetAvailable() {
   if (!process.env.DATABASE_URL || !process.env.CCN_PUBLIC_ORIGIN) return false;
@@ -39,10 +39,10 @@ export default async function handler(request, response) {
         const token = await issueAccessToken(user.id, 'reset');
         await sendAccessEmail(user, 'reset', token);
       } else {
-        const { createInstitutionalMailer } = await import('../_lib/institutional-mail.mjs');
-        const mailer = await createInstitutionalMailer();
-        try { await mailer.send({ to: user.email, subject: 'Seu usuário — CCN Digital', text: `Seu nome de usuário para o painel CCN Digital é: ${user.username}\n\nSe você não solicitou esta mensagem, ignore-a.` }); }
-        finally { mailer.close(); }
+        await sendInstitutionalMail(user.email, 'Seu usuário — CCN Digital', {
+          title: 'Seu nome de usuário', name: user.name,
+          paragraphs: ['Recebemos um pedido para lembrar o nome de usuário da sua conta no painel CCN Digital.', `Seu nome de usuário é: ${user.username}`],
+        });
       }
       await logActivity(user.id, `recovery.${action}`, user.id);
     }

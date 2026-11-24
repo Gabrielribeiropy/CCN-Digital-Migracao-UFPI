@@ -4,8 +4,9 @@ import { pgAcquireLease, pgDelete, pgGet, pgReleaseLease, pgReserveAttempt, pgSe
 let redisClient;
 let redisConnection;
 
+// Prévia da Vercel usa o mesmo serviço de armazenamento, mas nunca as chaves de produção.
 function storageKey(key) {
-  return process.env.CCN_PREVIEW_NAMESPACE === 'true' ? `ccn-preview:${key}` : key;
+  return process.env.VERCEL_ENV === 'preview' ? `ccn-preview:${key}` : key;
 }
 
 function credentials() {
@@ -62,6 +63,7 @@ async function command(parts) {
   return result.result;
 }
 
+// A reserva da tentativa e o prazo da chave são atômicos entre funções Vercel.
 export async function reserveLoginAttempt(key, limit = 5, windowSeconds = 900, cost = 1) {
   if (!Number.isSafeInteger(cost) || cost < 1) throw new Error('Custo de reserva inválido.');
   key = storageKey(key);

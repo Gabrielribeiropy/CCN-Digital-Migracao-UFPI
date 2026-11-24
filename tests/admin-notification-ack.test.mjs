@@ -5,12 +5,12 @@ import notifications from '../api/_lib/handlers/notifications.mjs';
 import { setJson } from '../api/_lib/kv-store.mjs';
 
 test('confirmação individual persiste, oculta o aviso e nova data gera novo aviso', async () => {
-  const names = ['CCN_ADMIN_SESSION_SECRET', 'CCN_ADMIN_MFA_REQUIRED', 'CCN_LEGACY_ADMIN_DISABLED', 'CCN_MFA_ENCRYPTION_KEY', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'DATABASE_URL', 'REDIS_URL', 'CCN_PREVIEW_NAMESPACE'];
+  const names = ['CCN_ADMIN_SESSION_SECRET', 'CCN_ADMIN_MFA_REQUIRED', 'CCN_LEGACY_ADMIN_DISABLED', 'CCN_MFA_ENCRYPTION_KEY', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'DATABASE_URL', 'REDIS_URL', 'VERCEL_ENV'];
   const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
   const originalFetch = globalThis.fetch;
   const records = new Map();
   Object.assign(process.env, { CCN_ADMIN_SESSION_SECRET:'test-session-secret', CCN_ADMIN_MFA_REQUIRED:'false', CCN_LEGACY_ADMIN_DISABLED:'false', CCN_MFA_ENCRYPTION_KEY:'f'.repeat(64), KV_REST_API_URL:'https://example.invalid/redis', KV_REST_API_TOKEN:'test-token' });
-  for (const name of ['DATABASE_URL', 'REDIS_URL', 'CCN_PREVIEW_NAMESPACE']) delete process.env[name];
+  for (const name of ['DATABASE_URL', 'REDIS_URL', 'VERCEL_ENV']) delete process.env[name];
   globalThis.fetch = async (_url, options) => {
     const [operation, ...args] = JSON.parse(options.body);
     let result;
@@ -21,7 +21,7 @@ test('confirmação individual persiste, oculta o aviso e nova data gera novo av
     return { ok:true, json:async () => ({ result }) };
   };
   const makeResponse = () => ({ statusCode:200, headers:{}, setHeader(key, value) { this.headers[key] = value; return this; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
-  const request = (method, body = {}, cookie = '', origin = 'https://example.org') => ({ method, body, headers:{ host:'example.org', origin, cookie, 'x-ccn-client-ip':'203.0.113.10' } });
+  const request = (method, body = {}, cookie = '', origin = 'https://example.org') => ({ method, body, headers:{ host:'example.org', origin, cookie, 'x-vercel-forwarded-for':'203.0.113.10' } });
   const call = async (method, body, cookie, origin) => { const response = makeResponse(); await notifications(request(method, body, cookie, origin), response); return response; };
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(new Date()).map(part => [part.type, part.value]));
   const base = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));

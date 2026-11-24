@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { deleteKey, getJson, setExpiring, setJson, takeKey } from './kv-store.mjs';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -100,6 +100,7 @@ export async function resetMfa(identity) {
   // Revogue os códigos primeiro: nenhum código antigo pode recuperar o fator removido.
   await deleteKey(`${key}:backup-set`);
   await deleteKey(`${key}:pending`);
+  await deleteKey(`${key}:email-code`);
   await deleteKey(key);
   if (set?.id && Array.isArray(set.digests)) {
     for (const digest of set.digests) await deleteKey(`${backupPrefix(identity, set.id)}${digest}`);
@@ -137,6 +138,32 @@ export async function useBackupCode(identity, input) {
   if (!Array.isArray(set.digests) || !set.digests.includes(digest)) return false;
   const used = (await takeKey(`${backupPrefix(identity, set.id)}${digest}`)) !== null;
   return used && (await readMfaVersion(identity)) === set.id;
+}
+
+// Código de 6 dígitos enviado ao e-mail cadastrado quando a pessoa perdeu autenticador e códigos de recuperação.
+const EMAIL_CODE_SECONDS = 600;
+const EMAIL_CODE_TRIES = 5;
+
+export async function createEmailRecoveryCode(identity) {
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  await setExpiring(`${storageKey(identity)}:email-code`, JSON.stringify({ digest: backupDigest(`email:${code}`), tries: 0, expires: Date.now() + EMAIL_CODE_SECONDS * 1000 }), EMAIL_CODE_SECONDS);
+  return code;
+}
+
+export async function useEmailRecoveryCode(identity, code) {
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) return false;
+  const key = `${storageKey(identity)}:email-code`;
+  const record = await getJson(key);
+  if (!record?.digest) return false;
+  const expected = Buffer.from(backupDigest(`email:${code}`));
+  if (Buffer.byteLength(record.digest) === expected.length && timingSafeEqual(Buffer.from(record.digest), expected)) {
+    // Consumo atômico: dois envios simultâneos do mesmo código não liberam duas sessões.
+    return (await takeKey(key)) !== null;
+  }
+  const remaining = Math.floor((record.expires - Date.now()) / 1000);
+  if (record.tries + 1 >= EMAIL_CODE_TRIES || remaining < 1) await deleteKey(key);
+  else await setExpiring(key, JSON.stringify({ ...record, tries: record.tries + 1 }), remaining);
+  return false;
 }
 
 export async function readMfaVersion(identity) {
