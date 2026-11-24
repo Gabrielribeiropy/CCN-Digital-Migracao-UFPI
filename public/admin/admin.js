@@ -1093,13 +1093,14 @@ async function refreshRecoveryAvailability() {
 document.querySelectorAll('[data-login]').forEach(button => button.addEventListener('click', () => authScreen('login')));
 document.querySelector('#recovery-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const form = event.currentTarget;
   const status = document.querySelector('#recovery-message');
   say(status, 'Enviando solicitação…', 'progress');
   try {
-    const email = event.currentTarget.elements.email.value.trim();
+    const email = form.elements.email.value.trim();
     const result = await request('/api/admin/recovery', { method:'POST', body:JSON.stringify({ action:recoveryMode, email }) });
     say(status, result.message);
-    event.currentTarget.reset();
+    form.reset();
   } catch (error) { say(status, error.message, 'error'); }
 });
 const resetToken = new URLSearchParams(location.hash.slice(1)).get('token');
@@ -1115,13 +1116,15 @@ if (!resetToken) {
 }
 document.querySelector('#reset-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const form = event.currentTarget;
   const status = document.querySelector('#reset-message');
-  const password = event.currentTarget.elements.password.value;
-  if (password !== event.currentTarget.elements.confirmation.value) { say(status, 'As senhas não conferem.', 'error'); return; }
+  const password = form.elements.password.value;
+  if (password !== form.elements.confirmation.value) { say(status, 'As senhas não conferem.', 'error'); return; }
   say(status, 'Salvando…', 'progress');
   try {
     await request('/api/admin/recovery', { method:'POST', body:JSON.stringify({ action:'reset', token:resetToken, password }) });
-    event.currentTarget.reset();
+    form.reset();
+    form.querySelector('[type=submit]').disabled = true;
     say(status, 'Senha definida. Volte ao login para entrar.', 'success');
   } catch (error) { say(status, error.message, 'error'); }
 });
